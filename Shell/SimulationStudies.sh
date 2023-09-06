@@ -83,8 +83,8 @@ module load R
 Rscript PhenotypeCombine.R
 
 library(plyr)
-file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/", pattern = ".tbl")
-sim_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/", file_list), read.table, header=T, sep = "\t")
+file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Processed/", pattern = ".tbl")
+sim_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Processed/", file_list), read.table, header=T, sep = "\t")
 
 ##  Map/BP data
 ##  File needs to have BP poisitions in 
@@ -115,7 +115,7 @@ for(i in 1:length(sim_files)){
         ph = pheno_list[[p]]
 
         pheno_dat = subset(data, data$PHENOTYPE == ph)
-        write.table(pheno_dat, paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedCombinedFiles/", ph, "-", sim_number, ".tbl"), col.names = F, row.names = F, quote = F)
+        write.table(pheno_dat, paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/ByPhenotype/", ph, "/", ph, "-", sim_number, ".tbl"), col.names = F, row.names = F, quote = F)
     }
 }
 
@@ -140,10 +140,10 @@ phenotypes = c("diabetes", "encephalopathy", "hearing", "sle")
 
 for(p in phenotypes){
 
-    indir = paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedCombinedFiles/")
+    indir = paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/ByPhenotype/", p, "/")
 
     file_list = list.files(indir, pattern = ".tbl")
-    data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedCombinedFiles/", file_list), read.table, header=F)
+    data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/ByPhenotype/", p, "/", file_list), read.table, header=F)
 
     head(data_files[[1]])
     ##  Rename the LOD columns to make them unique to each simulation 
@@ -175,14 +175,15 @@ for(p in phenotypes){
     results[1:10,1:15]
 
     ##  Save the results dataframe output
-    outdir = paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/AllLODs/", p, ".tbl")
+    outdir = paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results/", p, ".tbl")
     write.table(results, outdir, col.names = T, row.names = F, quote = F)
 }
 
 ##############################################################################################
 ##                                   Simulation Peak Boundaries                             ##
 ##############################################################################################
-SimulatedPeakBoundaries.sh
+##  Identify linakge peaks in simulations, for each phenotype use empirical suggestive threshold
+SimulatedPeakBoundariesDiabetes.sh
 #!/bin/bash
 #SBATCH -A spnmmd
 #SBATCH -p bigmem
@@ -190,20 +191,18 @@ SimulatedPeakBoundaries.sh
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=nrb177@ncl.ac.uk
 module load R
-Rscript SimulatedPeakBoundaries.R
+Rscript SimulatedPeakBoundariesDiabetes.R
 
 ##  Functions ####
 '%notin%' = Negate('%in%')
-
-phenotypes = c("diabetes", "encephalopathy", "hearing", "sle")
-
+phenotypes = c("encephalopathy")
 columns = paste0("LOD_", 1:1000)
-
 window = 15000000
 
-file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/AllLODs/", pattern = ".tbl")
-data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/AllLODs/", file_list), read.table, header=T)
+file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results", pattern = ".tbl")
+data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results/", file_list), read.table, header=T)
 
+## Diabetes
 chr_list = c()
 pheno_list = c()
 bp_list = c()
@@ -213,52 +212,38 @@ lod_list = c()
 pos = c()
 sim_list = c()
 
-for(file in 1:length(file_list)){
-    ##  Looking one file at a time
-    dat1 = data_files[[file]]
-
-    ##  Make a variable of which phenotype I'm looking at
-   p = phenotypes[[file]]
-
-    for(c in columns){
-        ##  Look at one LOd column at a time
-        dat2 = dat1[,which(names(dat1) %in% c("CHR", "LABEL", "BP", c))]
-        ##  Remove any LOD scores lower than 1.86
-        dat3 = subset(dat2, dat2[[c]] >= 1.86)
-
-        for(chr in 1:22){
-            ##  Subset data to look per chromosome
-            dat4 = subset(dat3, dat3$CHR == chr)
-
-            if(length(dat4[[c]]) > 0){
-                repeat{
-                  max_lod = max(dat4[[c]])
-                  lod_pos = subset(dat4, dat4[[c]] == max_lod)
-                  chromosome = chr
-                  lod_pos = lod_pos$BP[1]
-
-                  sim = c
-
-                  upper_lim = lod_pos + window
-                  lower_lim = lod_pos - window
-                  bp_remove = c(lower_lim:upper_lim)
-
-                  bp_list = c(bp_list, lod_pos)
-                  up_list = c(up_list, upper_lim)
-                  low_list = c(low_list, lower_lim)
-
-                  lod_list = c(lod_list, max_lod)
-                  pos = c(pos, lod_pos)
-
-                  sim_list = c(sim_list, c)
-
-                  chr_list = c(chr_list, chromosome)
-                  pheno_list = c(pheno_list, p)
-
-                  dat4 = subset(dat4, dat4$BP %notin% bp_remove)
-
-                if(length(dat4$LOD) == 0) break
-                }
+dat1 = data_files[[1]]
+p = "diabetes"
+lod_suggestive = 2.06
+  
+for(c in columns){
+    ##  Look at one LOD column at a time
+    dat2 = dat1[,which(names(dat1) %in% c("CHR", "LABEL", "BP", c))]
+    ##  Remove any LOD scores lower than suggestive threshold
+    dat3 = subset(dat2, dat2[[c]] >= lod_suggestive)
+    for(chr in 1:22){
+        ##  Subset data to look per chromosome
+        dat4 = subset(dat3, dat3$CHR == chr)
+        if(length(dat4[[c]]) > 0){
+            repeat{
+              max_lod = max(dat4[[c]])
+              lod_pos = subset(dat4, dat4[[c]] == max_lod)
+              chromosome = chr
+              lod_pos = lod_pos$BP[1]
+              sim = c
+              upper_lim = lod_pos + window
+              lower_lim = lod_pos - window
+              bp_remove = c(lower_lim:upper_lim)
+              bp_list = c(bp_list, lod_pos)
+              up_list = c(up_list, upper_lim)
+              low_list = c(low_list, lower_lim)
+              lod_list = c(lod_list, max_lod)
+              pos = c(pos, lod_pos)
+              sim_list = c(sim_list, c)
+              chr_list = c(chr_list, chromosome)
+              pheno_list = c(pheno_list, p)
+              dat4 = subset(dat4, dat4$BP %notin% bp_remove)
+            if(length(dat4$LOD) == 0) break
             }
         }
     }
@@ -277,11 +262,263 @@ results$BP_Lower = low_list
 results$BP_Upper = up_list
 results$Sim = sim_list
 results
-write.table(results, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/AllLODs/PeakBoundaries.txt", col.names = T, row.names = F, quote = F)
+write.table(results, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesDiabetes.txt", col.names = T, row.names = F, quote = F)
+
+##  Encephalopathy  ####
+SimulatedPeakBoundariesEncephaloapthy.sh
+#!/bin/bash
+#SBATCH -A spnmmd
+#SBATCH -p bigmem
+#SBATCH --mem=10G
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=nrb177@ncl.ac.uk
+module load R
+Rscript SimulatedPeakBoundariesEncephalopathy.R
+
+##  Functions ####
+'%notin%' = Negate('%in%')
+phenotypes = c("encephalopathy")
+columns = paste0("LOD_", 1:1000)
+window = 15000000
+
+file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results", pattern = ".tbl")
+data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results/", file_list), read.table, header=T)
+
+## Diabetes
+chr_list = c()
+pheno_list = c()
+bp_list = c()
+up_list = c()
+low_list = c()
+lod_list = c()
+pos = c()
+sim_list = c()
+
+dat1 = data_files[[2]]
+p = "encephalopathy"
+lod_suggestive = 2.23
+  
+for(c in columns){
+    ##  Look at one LOD column at a time
+    dat2 = dat1[,which(names(dat1) %in% c("CHR", "LABEL", "BP", c))]
+    ##  Remove any LOD scores lower than suggestive threshold
+    dat3 = subset(dat2, dat2[[c]] >= lod_suggestive)
+    for(chr in 1:22){
+        ##  Subset data to look per chromosome
+        dat4 = subset(dat3, dat3$CHR == chr)
+        if(length(dat4[[c]]) > 0){
+            repeat{
+              max_lod = max(dat4[[c]])
+              lod_pos = subset(dat4, dat4[[c]] == max_lod)
+              chromosome = chr
+              lod_pos = lod_pos$BP[1]
+              sim = c
+              upper_lim = lod_pos + window
+              lower_lim = lod_pos - window
+              bp_remove = c(lower_lim:upper_lim)
+              bp_list = c(bp_list, lod_pos)
+              up_list = c(up_list, upper_lim)
+              low_list = c(low_list, lower_lim)
+              lod_list = c(lod_list, max_lod)
+              pos = c(pos, lod_pos)
+              sim_list = c(sim_list, c)
+              chr_list = c(chr_list, chromosome)
+              pheno_list = c(pheno_list, p)
+              dat4 = subset(dat4, dat4$BP %notin% bp_remove)
+            if(length(dat4$LOD) == 0) break
+            }
+        }
+    }
+}
+
+length(bp_list)
+length(chr_list)
+
+results = as.data.frame(matrix(ncol = 7, nrow = length(bp_list)))
+names(results) = c("pheno", "chr", "LOD", "BP", "BP_Lower", "BP_Upper", "Sim")
+results$pheno = pheno_list
+results$chr = chr_list
+results$LOD = lod_list
+results$BP = bp_list
+results$BP_Lower = low_list
+results$BP_Upper = up_list
+results$Sim = sim_list
+results
+write.table(results, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesEncephalopathy.txt", col.names = T, row.names = F, quote = F)
+
+##  Hearing Impairment  ####
+SimulatedPeakBoundariesHearing.sh
+#!/bin/bash
+#SBATCH -A spnmmd
+#SBATCH -p bigmem
+#SBATCH --mem=10G
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=nrb177@ncl.ac.uk
+module load R
+Rscript SimulatedPeakBoundariesHearing.R
+
+##  Functions ####
+'%notin%' = Negate('%in%')
+phenotypes = c("encephalopathy")
+columns = paste0("LOD_", 1:1000)
+window = 15000000
+
+file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results", pattern = ".tbl")
+data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results/", file_list), read.table, header=T)
+
+chr_list = c()
+pheno_list = c()
+bp_list = c()
+up_list = c()
+low_list = c()
+lod_list = c()
+pos = c()
+sim_list = c()
+
+dat1 = data_files[[3]]
+p = "hearing"
+lod_suggestive = 2.32
+  
+for(c in columns){
+    ##  Look at one LOD column at a time
+    dat2 = dat1[,which(names(dat1) %in% c("CHR", "LABEL", "BP", c))]
+    ##  Remove any LOD scores lower than suggestive threshold
+    dat3 = subset(dat2, dat2[[c]] >= lod_suggestive)
+    for(chr in 1:22){
+        ##  Subset data to look per chromosome
+        dat4 = subset(dat3, dat3$CHR == chr)
+        if(length(dat4[[c]]) > 0){
+            repeat{
+              max_lod = max(dat4[[c]])
+              lod_pos = subset(dat4, dat4[[c]] == max_lod)
+              chromosome = chr
+              lod_pos = lod_pos$BP[1]
+              sim = c
+              upper_lim = lod_pos + window
+              lower_lim = lod_pos - window
+              bp_remove = c(lower_lim:upper_lim)
+              bp_list = c(bp_list, lod_pos)
+              up_list = c(up_list, upper_lim)
+              low_list = c(low_list, lower_lim)
+              lod_list = c(lod_list, max_lod)
+              pos = c(pos, lod_pos)
+              sim_list = c(sim_list, c)
+              chr_list = c(chr_list, chromosome)
+              pheno_list = c(pheno_list, p)
+              dat4 = subset(dat4, dat4$BP %notin% bp_remove)
+            if(length(dat4$LOD) == 0) break
+            }
+        }
+    }
+}
+
+length(bp_list)
+length(chr_list)
+
+results = as.data.frame(matrix(ncol = 7, nrow = length(bp_list)))
+names(results) = c("pheno", "chr", "LOD", "BP", "BP_Lower", "BP_Upper", "Sim")
+results$pheno = pheno_list
+results$chr = chr_list
+results$LOD = lod_list
+results$BP = bp_list
+results$BP_Lower = low_list
+results$BP_Upper = up_list
+results$Sim = sim_list
+results
+write.table(results, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesHearing.txt", col.names = T, row.names = F, quote = F)
+
+##  Stoke-like episodes  ####
+SimulatedPeakBoundariesSLE.sh
+#!/bin/bash
+#SBATCH -A spnmmd
+#SBATCH -p bigmem
+#SBATCH --mem=10G
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=nrb177@ncl.ac.uk
+module load R
+Rscript SimulatedPeakBoundariesSLE.R
+
+##  Functions ####
+'%notin%' = Negate('%in%')
+phenotypes = c("encephalopathy")
+columns = paste0("LOD_", 1:1000)
+window = 15000000
+
+file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results", pattern = ".tbl")
+data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/Results/", file_list), read.table, header=T)
+
+chr_list = c()
+pheno_list = c()
+bp_list = c()
+up_list = c()
+low_list = c()
+lod_list = c()
+pos = c()
+sim_list = c()
+
+dat1 = data_files[[4]]
+p = "sle"
+lod_suggestive = 1.94
+  
+for(c in columns){
+    ##  Look at one LOD column at a time
+    dat2 = dat1[,which(names(dat1) %in% c("CHR", "LABEL", "BP", c))]
+    ##  Remove any LOD scores lower than suggestive threshold
+    dat3 = subset(dat2, dat2[[c]] >= lod_suggestive)
+    for(chr in 1:22){
+        ##  Subset data to look per chromosome
+        dat4 = subset(dat3, dat3$CHR == chr)
+        if(length(dat4[[c]]) > 0){
+            repeat{
+              max_lod = max(dat4[[c]])
+              lod_pos = subset(dat4, dat4[[c]] == max_lod)
+              chromosome = chr
+              lod_pos = lod_pos$BP[1]
+              sim = c
+              upper_lim = lod_pos + window
+              lower_lim = lod_pos - window
+              bp_remove = c(lower_lim:upper_lim)
+              bp_list = c(bp_list, lod_pos)
+              up_list = c(up_list, upper_lim)
+              low_list = c(low_list, lower_lim)
+              lod_list = c(lod_list, max_lod)
+              pos = c(pos, lod_pos)
+              sim_list = c(sim_list, c)
+              chr_list = c(chr_list, chromosome)
+              pheno_list = c(pheno_list, p)
+              dat4 = subset(dat4, dat4$BP %notin% bp_remove)
+            if(length(dat4$LOD) == 0) break
+            }
+        }
+    }
+}
+
+length(bp_list)
+length(chr_list)
+
+results = as.data.frame(matrix(ncol = 7, nrow = length(bp_list)))
+names(results) = c("pheno", "chr", "LOD", "BP", "BP_Lower", "BP_Upper", "Sim")
+results$pheno = pheno_list
+results$chr = chr_list
+results$LOD = lod_list
+results$BP = bp_list
+results$BP_Lower = low_list
+results$BP_Upper = up_list
+results$Sim = sim_list
+results
+write.table(results, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesSLE.txt", col.names = T, row.names = F, quote = F)
+
 
 ##############################################################################################
 ##                                   Simulation Peak Adjustment                             ##
 ##############################################################################################
+##  Combine all simulated files together
+R
+file_list = list.files("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/", pattern = ".txt")
+data_files = lapply(paste0("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/", file_list), read.table, header=T)
+all_data = rbind(data_files[[1]], data_files[[2]], data_files[[3]], data_files[[4]])
+write.table(all_data, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesAll.txt", col.names = T, row.names = F, quote = F)
+
 PeakAdjustment.sh
 #!/bin/bash
 #SBATCH -A spnmmd
@@ -291,7 +528,7 @@ module load R
 Rscript PeakAdjustment.R
 
 ##  Data  ####
-peaks = read.table("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/AllLODs/PeakBoundaries.txt", stringsAsFactors = F, h = T)
+peaks = read.table("/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesAll.txt", stringsAsFactors = F, h = T)
 head(peaks)
 ##  Create a Peak_LOD column in current data or I cannot use it later on
 peaks$Peak_LOD = peaks$LOD
@@ -375,7 +612,7 @@ for(p in phenotypes){
   }
 }
 
-write.table(new_data, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/AllLODs/PeaksAdjusted.txt", col.names = T, row.names = F, quote = F)
+write.table(new_data, "/nobackup/proj/spnmmd/Roisin/3243/Simulation/Output/SimulatedAnalysis/PeakBoundariesAdjusted.txt", col.names = T, row.names = F, quote = F)
 
 ##############################################################################################
 ##                                Empirical p-value calculations                            ##
