@@ -67,7 +67,6 @@ enceph.plot =
   ggplot(data = enceph3) + theme_light() +
   geom_bar(aes(x = Freq),  fill = "#009988", colour="#009988") +
   scale_x_continuous(breaks = seq(0, 9, 1)) +
-  geom_point(aes(x = 4, y = 100), colour = "#ee7733", shape = 8, size = 3) +
   labs(x = "Number of peaks predicted", y = "Frequency", title = "Encephalopathy")
 
 ##  Diabetes  ####
@@ -89,7 +88,6 @@ diabetes.plot =
   ggplot(data = diabetes3) + theme_light() +
   geom_bar(aes(x = Freq),  fill = "#009988", colour="#009988") +
   scale_x_continuous(breaks = seq(0, 9, 1)) +
-  geom_point(aes(x = 4, y = 100), colour = "#ee7733", shape = 8, size = 3) +
   labs(x = "Number of peaks predicted", y = "Frequency", title = "Diabetes")
 
 ##  Hearing ####
@@ -111,7 +109,6 @@ hearing.plot =
   ggplot(data = hearing3) + theme_light() +
   geom_bar(aes(x = Freq),  fill = "#009988", colour="#009988") +
   scale_x_continuous(breaks = seq(0, 9, 1)) +
-  geom_point(aes(x = 4, y = 100), colour = "#ee7733", shape = 8, size = 3) +
   labs(x = "Number of peaks predicted", y = "Frequency", title = "Hearing impariment")
 
 ##  SLE ####
@@ -133,7 +130,6 @@ sle.plot =
   ggplot(data = sle3) + theme_light() +
   geom_bar(aes(x = Freq),  fill = "#009988", colour="#009988") +
   scale_x_continuous(breaks = seq(0, 9, 1)) +
-  geom_point(aes(x = 4, y = 100), colour = "#ee7733", shape = 8, size = 3) +
   labs(x = "Number of peaks predicted", y = "Frequency", title = "Stroke-like episodes")
 
 pl = enceph.plot + sle.plot + diabetes.plot + hearing.plot + plot_layout(ncol = 2)
